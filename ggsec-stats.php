@@ -1,12 +1,16 @@
 <?php
 /**
- * Plugin Name: GGSEC Stats
- * Description: Privacy-first page view statistics: humans vs bots, referrers, top pages, online now. No cookies, no external services.
- * Version:     1.2.1
- * Author:      GG Advanced IT Security UG
- * License:     GPL-2.0+
+ * Plugin Name:       GGSEC Stats
+ * Plugin URI:        https://github.com/ggsec-de/ggsec-stats
+ * Description:       Privacy-first page view statistics: humans vs bots, referrers, top pages, online now. No cookies, no external services.
+ * Version:           1.3.0
  * Requires at least: 6.3
- * Requires PHP: 7.4
+ * Requires PHP:      7.4
+ * Author:            GG Advanced IT Security UG
+ * Author URI:        https://ggsec.de/
+ * License:           GPL-2.0-or-later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       ggsec-stats
  *
  * Optional constants in wp-config.php:
  *   define( 'GGSEC_STATS_RETENTION_DAYS', 90 );   // days raw hits are kept
@@ -17,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const GGSEC_STATS_VERSION    = '1.2.1';
+const GGSEC_STATS_VERSION    = '1.3.0';
 const GGSEC_STATS_DB_VERSION = '2';
 
 // Hit kinds.
@@ -120,14 +124,32 @@ register_deactivation_hook( __FILE__, 'ggsec_stats_deactivate' );
  */
 function ggsec_stats_cleanup() {
 	global $wpdb;
-	$table  = ggsec_stats_table();
 	$cutoff = gmdate( 'Y-m-d H:i:s', time() - ggsec_stats_retention_days() * DAY_IN_SECONDS );
 
 	for ( $i = 0; $i < 50; $i++ ) {
-		$deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE created_at < %s LIMIT 5000", $cutoff ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- plugin's own table, batched retention cleanup.
+		$deleted = $wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE created_at < %s LIMIT 5000', ggsec_stats_table(), $cutoff ) );
 		if ( ! $deleted ) {
 			break;
 		}
 	}
 }
 add_action( 'ggsec_stats_daily', 'ggsec_stats_cleanup' );
+
+/**
+ * Suggested text for the site's privacy policy (Settings > Privacy > Policy Guide).
+ */
+function ggsec_stats_privacy_policy_content() {
+	if ( ! function_exists( 'wp_add_privacy_policy_content' ) ) {
+		return;
+	}
+	$content = '<p>' . __( 'This website counts page views with the GGSEC Stats plugin. The statistics are stored only in the website database; no data is sent to third parties and no cookies or browser storage are used.', 'ggsec-stats' ) . '</p>'
+		. '<p>' . __( 'Your IP address is not stored. To count unique visitors, a shortened one-way hash of your IP address, browser user agent and the current date is stored, keyed with a random value that is replaced every day, so a visit cannot be linked to visits on other days. We also store the requested page, the referring website without query string and the time of the request. For requests not confirmed as a visible page view (for example bots), the browser user agent is stored as well.', 'ggsec-stats' ) . '</p>'
+		. '<p>' . sprintf(
+			/* translators: %d: number of days raw statistics are kept. */
+			__( 'Statistics data is deleted automatically after %d days.', 'ggsec-stats' ),
+			ggsec_stats_retention_days()
+		) . '</p>';
+	wp_add_privacy_policy_content( 'GGSEC Stats', wp_kses_post( $content ) );
+}
+add_action( 'admin_init', 'ggsec_stats_privacy_policy_content' );

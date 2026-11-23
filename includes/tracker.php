@@ -12,8 +12,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $GLOBALS['ggsec_stats_hit_id'] = 0;
 
+/**
+ * Sanitized request value from $_SERVER ('' when missing).
+ *
+ * URLs keep their percent-encoding (sanitize_text_field() would strip it and change the recorded path);
+ * all other values are plain header text.
+ */
 function ggsec_stats_server( $key ) {
-	return isset( $_SERVER[ $key ] ) && is_string( $_SERVER[ $key ] ) ? wp_unslash( $_SERVER[ $key ] ) : '';
+	if ( ! isset( $_SERVER[ $key ] ) || ! is_string( $_SERVER[ $key ] ) ) {
+		return '';
+	}
+	if ( 'REQUEST_URI' === $key || 'HTTP_REFERER' === $key ) {
+		return esc_url_raw( wp_unslash( $_SERVER[ $key ] ), array( 'http', 'https', 'android-app' ) );
+	}
+	return sanitize_text_field( wp_unslash( $_SERVER[ $key ] ) );
 }
 
 function ggsec_stats_truncate( $value, $length ) {
@@ -85,6 +97,7 @@ function ggsec_stats_referrer() {
 }
 
 function ggsec_stats_utm_source() {
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only campaign tag of a public page view.
 	foreach ( array( 'utm_source', 'ref' ) as $key ) {
 		if ( isset( $_GET[ $key ] ) && is_string( $_GET[ $key ] ) ) {
 			$value = sanitize_text_field( wp_unslash( $_GET[ $key ] ) );
@@ -93,6 +106,7 @@ function ggsec_stats_utm_source() {
 			}
 		}
 	}
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
 	return null;
 }
 
@@ -124,8 +138,9 @@ function ggsec_stats_record_hit( $status, $path, $post_id = null, $force_kind = 
 	$cap     = ggsec_stats_daily_client_cap();
 
 	// Flood guard: bounded index read (stops counting at the cap) instead of an extra write.
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- plugin's own table; the count must be live.
 	$seen = (int) $wpdb->get_var(
-		$wpdb->prepare( "SELECT COUNT(*) FROM (SELECT 1 FROM {$table} WHERE day = %s AND visitor = %s LIMIT %d) AS capped", $day, $visitor, $cap )
+		$wpdb->prepare( 'SELECT COUNT(*) FROM (SELECT 1 FROM %i WHERE day = %s AND visitor = %s LIMIT %d) AS capped', $table, $day, $visitor, $cap )
 	);
 	if ( $seen >= $cap ) {
 		return 0;
@@ -162,6 +177,7 @@ function ggsec_stats_record_hit( $status, $path, $post_id = null, $force_kind = 
 		'utm_source' => ggsec_stats_utm_source(),
 	);
 
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- plugin's own table.
 	$ok = $wpdb->insert( $table, $row, array( '%s', '%s', '%s', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s' ) );
 	if ( ! $ok ) {
 		return 0;
@@ -338,13 +354,14 @@ function ggsec_stats_rest_confirm( WP_REST_Request $request ) {
 
 	$id = (int) $request['id'];
 	if ( ! hash_equals( ggsec_stats_token( $id ), (string) $request['t'] ) ) {
-		return new WP_Error( 'ggsec_stats_invalid_token', 'Invalid token.', array( 'status' => 403 ) );
+		return new WP_Error( 'ggsec_stats_invalid_token', __( 'Invalid token.', 'ggsec-stats' ), array( 'status' => 403 ) );
 	}
 
-	$table = ggsec_stats_table();
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- plugin's own table.
 	$wpdb->query(
 		$wpdb->prepare(
-			"UPDATE {$table} SET kind = %d, ua = NULL WHERE id = %d AND kind IN (%d, %d) AND created_at >= %s",
+			'UPDATE %i SET kind = %d, ua = NULL WHERE id = %d AND kind IN (%d, %d) AND created_at >= %s',
+			ggsec_stats_table(),
 			GGSEC_STATS_KIND_HUMAN,
 			$id,
 			GGSEC_STATS_KIND_UNVERIFIED,
@@ -375,13 +392,14 @@ function ggsec_stats_rest_download( WP_REST_Request $request ) {
 
 	$id = (int) $request['id'];
 	if ( ! hash_equals( ggsec_stats_token( $id ), (string) $request['t'] ) ) {
-		return new WP_Error( 'ggsec_stats_invalid_token', 'Invalid token.', array( 'status' => 403 ) );
+		return new WP_Error( 'ggsec_stats_invalid_token', __( 'Invalid token.', 'ggsec-stats' ), array( 'status' => 403 ) );
 	}
 
-	$table  = ggsec_stats_table();
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- plugin's own table.
 	$parent = $wpdb->get_var(
 		$wpdb->prepare(
-			"SELECT id FROM {$table} WHERE id = %d AND kind <> %d AND created_at >= %s",
+			'SELECT id FROM %i WHERE id = %d AND kind <> %d AND created_at >= %s',
+			ggsec_stats_table(),
 			$id,
 			GGSEC_STATS_KIND_BOT,
 			gmdate( 'Y-m-d H:i:s', time() - 12 * HOUR_IN_SECONDS )
@@ -395,7 +413,7 @@ function ggsec_stats_rest_download( WP_REST_Request $request ) {
 	$path = ggsec_stats_normalize_path( $raw );
 	$ext  = strtolower( (string) pathinfo( $path, PATHINFO_EXTENSION ) );
 	if ( '' === $raw || '/' !== $raw[0] || ! in_array( $ext, ggsec_stats_download_extensions(), true ) ) {
-		return new WP_Error( 'ggsec_stats_invalid_file', 'Not a tracked file.', array( 'status' => 400 ) );
+		return new WP_Error( 'ggsec_stats_invalid_file', __( 'Not a tracked file.', 'ggsec-stats' ), array( 'status' => 400 ) );
 	}
 
 	ggsec_stats_record_hit( GGSEC_STATS_STATUS_DOWNLOAD, $path, null, GGSEC_STATS_KIND_HUMAN );
