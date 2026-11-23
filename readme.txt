@@ -1,5 +1,5 @@
 === GGSEC Stats ===
-Contributors: ggsec
+Contributors: patapik
 Tags: analytics, statistics, privacy, bots, security
 Requires at least: 6.3
 Tested up to: 7.1
