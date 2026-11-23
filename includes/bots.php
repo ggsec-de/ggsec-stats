@@ -206,14 +206,14 @@ function ggsec_stats_is_sensitive_path( $path ) {
 
 function ggsec_stats_bot_type_label( $type ) {
 	$labels = array(
-		'search'  => 'Search engine',
-		'ai'      => 'AI crawler',
-		'seo'     => 'SEO tool',
-		'social'  => 'Social preview',
-		'monitor' => 'Monitoring',
-		'scanner' => 'Security scanner',
-		'tool'    => 'Script / library',
-		'unknown' => 'Other',
+		'search'  => __( 'Search engine', 'ggsec-stats' ),
+		'ai'      => __( 'AI crawler', 'ggsec-stats' ),
+		'seo'     => __( 'SEO tool', 'ggsec-stats' ),
+		'social'  => __( 'Social preview', 'ggsec-stats' ),
+		'monitor' => __( 'Monitoring', 'ggsec-stats' ),
+		'scanner' => __( 'Security scanner', 'ggsec-stats' ),
+		'tool'    => __( 'Script / library', 'ggsec-stats' ),
+		'unknown' => __( 'Other', 'ggsec-stats' ),
 	);
-	return $labels[ $type ] ?? 'Other';
+	return $labels[ $type ] ?? $labels['unknown'];
 }

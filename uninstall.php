@@ -8,9 +8,10 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 }
 
 global $wpdb;
-$wpdb->query( 'DROP TABLE IF EXISTS ' . $wpdb->prefix . 'ggsec_stats_hits' ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name only.
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- removes the plugin's own table on uninstall.
+$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $wpdb->prefix . 'ggsec_stats_hits' ) );
 
-foreach ( array( 'ggsec_stats_db_version', 'ggsec_stats_salt', 'ggsec_stats_salt_day' ) as $option ) {
-	delete_option( $option );
-}
+delete_option( 'ggsec_stats_db_version' );
+delete_option( 'ggsec_stats_salt' );
+delete_option( 'ggsec_stats_salt_day' );
 wp_clear_scheduled_hook( 'ggsec_stats_daily' );
