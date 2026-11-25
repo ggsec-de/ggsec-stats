@@ -4,7 +4,7 @@ Tags: analytics, statistics, privacy, bots, security
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,7 +45,7 @@ The plugin adds a suggested text to the privacy policy guide (Settings > Privacy
 
 1. Install the plugin from the Plugins screen, or upload the `ggsec-stats` folder to `/wp-content/plugins/`.
 2. Activate **GGSEC Stats** on the Plugins screen.
-3. Open **GGSEC Stats** in the admin menu.
+3. Open **Dashboard > GGSEC Stats** in the admin menu.
 
 Optional settings in `wp-config.php`:
 
@@ -77,6 +77,9 @@ Deleting the plugin from the Plugins screen drops its database table and removes
 
 == Changelog ==
 
+= 1.3.1 =
+* The statistics page moved from a top-level admin menu item to **Dashboard > GGSEC Stats**.
+
 = 1.3.0 =
 * Prepared for WordPress.org: readme.txt, GPLv2 license file, translatable admin strings, privacy policy text.
 * Hardened output escaping and request input sanitization.
@@ -96,6 +99,9 @@ Deleting the plugin from the Plugins screen drops its database table and removes
 * First release.
 
 == Upgrade Notice ==
+
+= 1.3.1 =
+The statistics page is now under Dashboard > GGSEC Stats.
 
 = 1.3.0 =
 Translation-ready admin screens and hardening for the WordPress.org directory.

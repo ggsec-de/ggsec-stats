@@ -3,7 +3,7 @@
  * Plugin Name:       GGSEC Stats
  * Plugin URI:        https://github.com/ggsec-de/ggsec-stats
  * Description:       Privacy-first page view statistics: humans vs bots, referrers, top pages, online now. No cookies, no external services.
- * Version:           1.3.0
+ * Version:           1.3.1
  * Requires at least: 6.3
  * Requires PHP:      7.4
  * Author:            GG Advanced IT Security UG
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const GGSEC_STATS_VERSION    = '1.3.0';
+const GGSEC_STATS_VERSION    = '1.3.1';
 const GGSEC_STATS_DB_VERSION = '2';
 
 // Hit kinds.

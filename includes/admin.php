@@ -461,21 +461,20 @@ function ggsec_stats_chart_svg( $series ) {
 	return $svg . '</svg>';
 }
 
+// The statistics page lives under Dashboard (index.php?page=ggsec-stats), next to the dashboard widget.
 function ggsec_stats_register_menu() {
-	add_menu_page(
+	add_dashboard_page(
 		__( 'GGSEC Stats', 'ggsec-stats' ),
 		__( 'GGSEC Stats', 'ggsec-stats' ),
 		'manage_options',
 		'ggsec-stats',
-		'ggsec_stats_render_page',
-		'dashicons-chart-bar',
-		3
+		'ggsec_stats_render_page'
 	);
 }
 add_action( 'admin_menu', 'ggsec_stats_register_menu' );
 
 function ggsec_stats_admin_assets( $hook ) {
-	if ( 'toplevel_page_ggsec-stats' === $hook || 'index.php' === $hook ) {
+	if ( 'dashboard_page_ggsec-stats' === $hook || 'index.php' === $hook ) {
 		wp_enqueue_style( 'ggsec-stats-admin', plugins_url( 'assets/admin.css', GGSEC_STATS_FILE ), array(), GGSEC_STATS_VERSION );
 	}
 }
@@ -550,7 +549,7 @@ function ggsec_stats_render_page() {
 		<nav class="nav-tab-wrapper">
 			<?php foreach ( $ranges as $key => $def ) : ?>
 				<a class="nav-tab<?php echo $key === $range ? ' nav-tab-active' : ''; ?>"
-					href="<?php echo esc_url( add_query_arg( array( 'page' => 'ggsec-stats', 'range' => $key ), admin_url( 'admin.php' ) ) ); ?>"><?php echo esc_html( $def[1] ); ?></a>
+					href="<?php echo esc_url( add_query_arg( array( 'page' => 'ggsec-stats', 'range' => $key ), admin_url( 'index.php' ) ) ); ?>"><?php echo esc_html( $def[1] ); ?></a>
 			<?php endforeach; ?>
 		</nav>
 
@@ -757,5 +756,5 @@ function ggsec_stats_render_widget() {
 		echo '<p>' . esc_html__( 'Top referrer:', 'ggsec-stats' ) . ' <strong>' . esc_html( $refs['hosts'][0]['ref_host'] ) . '</strong> ('
 			. esc_html( number_format_i18n( (int) $refs['hosts'][0]['views'] ) ) . ')</p>';
 	}
-	echo '<p><a href="' . esc_url( admin_url( 'admin.php?page=ggsec-stats' ) ) . '">' . esc_html__( 'Open GGSEC Stats', 'ggsec-stats' ) . '</a></p>';
+	echo '<p><a href="' . esc_url( admin_url( 'index.php?page=ggsec-stats' ) ) . '">' . esc_html__( 'Open GGSEC Stats', 'ggsec-stats' ) . '</a></p>';
 }
