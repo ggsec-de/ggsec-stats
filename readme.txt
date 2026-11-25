@@ -75,6 +75,13 @@ Many scanners pretend to be a browser. A request is counted as human only when t
 
 Deleting the plugin from the Plugins screen drops its database table and removes its options and scheduled event.
 
+== Screenshots ==
+
+1. Overview: human views, unique visitors, bots and visitors online now, with the daily humans-vs-bots chart.
+2. Top pages and external referrers, including UTM sources.
+3. Bots by name and type, plus login/XML-RPC probes and suspicious 404 paths.
+4. Dashboard widget with today's numbers.
+
 == Changelog ==
 
 = 1.3.1 =
