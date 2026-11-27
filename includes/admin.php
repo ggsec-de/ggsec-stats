@@ -646,7 +646,7 @@ function ggsec_stats_chart_svg( $series, $label = '' ) {
 		$svg .= '</g>';
 		if ( 0 === $i % $every || $i === $n - 1 ) {
 			// Days as "11-27", months as the short month name.
-			$text = 7 === strlen( $day ) ? date_i18n( 'M', (int) strtotime( $day . '-15' ) ) : substr( $day, 5 );
+			$text = 7 === strlen( $day ) ? wp_date( 'M', ( new DateTimeImmutable( $day . '-01', wp_timezone() ) )->getTimestamp() ) : substr( $day, 5 );
 			$svg .= sprintf( '<text class="lbl" x="%.1f" y="%d" text-anchor="middle">%s</text>', $x + $bar_w / 2, $h - 6, esc_html( $text ) );
 		}
 		$i++;
@@ -853,7 +853,7 @@ function ggsec_stats_render_page() {
 					sprintf(
 						/* translators: %s: date the statistics history starts. */
 						__( 'History since %s. Daily totals are kept after the raw data is deleted, so this chart keeps growing.', 'ggsec-stats' ),
-						date_i18n( get_option( 'date_format' ), (int) strtotime( $history_start . ' 12:00' ) )
+						ggsec_stats_mail_date( $history_start )
 					)
 				);
 				?>
