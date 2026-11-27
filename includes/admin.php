@@ -36,6 +36,13 @@ function ggsec_stats_until_day( $until = null ) {
 }
 
 /**
+ * Optional UTC upper bound on created_at; null means no bound (the range is limited by day only).
+ */
+function ggsec_stats_before_utc( $before = null ) {
+	return null === $before ? '9999-12-31 23:59:59' : (string) $before;
+}
+
+/**
  * Unverified hits created before this UTC time never got a beacon and are reported as bots.
  */
 function ggsec_stats_unverified_cutoff() {
@@ -56,9 +63,12 @@ function ggsec_stats_unverified_cutoff() {
 /**
  * Headline numbers for a range.
  *
+ * @param string      $since  First local day (Y-m-d).
+ * @param string|null $until  Last local day; default today.
+ * @param string|null $before Only hits created before this UTC time (previous-period comparison up to the same clock time).
  * @return array<string,int>
  */
-function ggsec_stats_summary( $since, $until = null ) {
+function ggsec_stats_summary( $since, $until = null, $before = null ) {
 	global $wpdb;
 	$row = $wpdb->get_row(
 		$wpdb->prepare(
@@ -69,7 +79,7 @@ function ggsec_stats_summary( $since, $until = null ) {
 				SUM(kind = %d AND status <> %d AND created_at < %s) AS bots_nojs,
 				SUM(status = %d) AS probes,
 				SUM(status = %d) AS downloads
-			FROM %i WHERE day BETWEEN %s AND %s',
+			FROM %i WHERE day BETWEEN %s AND %s AND created_at < %s',
 			GGSEC_STATS_KIND_HUMAN,
 			GGSEC_STATS_STATUS_OK,
 			GGSEC_STATS_KIND_HUMAN,
@@ -83,7 +93,8 @@ function ggsec_stats_summary( $since, $until = null ) {
 			GGSEC_STATS_STATUS_DOWNLOAD,
 			ggsec_stats_table(),
 			$since,
-			ggsec_stats_until_day( $until )
+			ggsec_stats_until_day( $until ),
+			ggsec_stats_before_utc( $before )
 		),
 		ARRAY_A
 	);
@@ -147,6 +158,76 @@ function ggsec_stats_daily_series( $days ) {
 		}
 	}
 	return $series;
+}
+
+/**
+ * Humans and bots per month for the last 12 months (current month included, missing months zero):
+ * aggregated days from the daily table, days not aggregated yet (today, ...) from the raw hits.
+ *
+ * @return array<string,array{h:int,b:int}> Keyed by "Y-m".
+ */
+function ggsec_stats_monthly_series() {
+	global $wpdb;
+	$tz    = wp_timezone();
+	$month = new DateTimeImmutable( 'first day of this month', $tz );
+	$start = $month->modify( '-11 months' );
+
+	$series = array();
+	for ( $i = 0; $i < 12; $i++ ) {
+		$series[ $start->modify( '+' . $i . ' months' )->format( 'Y-m' ) ] = array( 'h' => 0, 'b' => 0 );
+	}
+
+	$daily = ggsec_stats_daily_table();
+	$last  = (string) $wpdb->get_var( $wpdb->prepare( 'SELECT MAX(day) FROM %i', $daily ) );
+	$rows  = $wpdb->get_results(
+		$wpdb->prepare(
+			'SELECT LEFT(day, 7) AS m, SUM(human_views) AS h, SUM(bots_known + bots_nojs) AS b FROM %i WHERE day >= %s GROUP BY m',
+			$daily,
+			$start->format( 'Y-m-d' )
+		),
+		ARRAY_A
+	);
+	$rows  = array_merge(
+		$rows,
+		$wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT LEFT(day, 7) AS m,
+					SUM(kind = %d AND status = %d) AS h,
+					SUM(status <> %d AND (kind = %d OR (kind = %d AND created_at < %s))) AS b
+				FROM %i WHERE day > %s AND day >= %s GROUP BY m',
+				GGSEC_STATS_KIND_HUMAN,
+				GGSEC_STATS_STATUS_OK,
+				GGSEC_STATS_STATUS_PROBE,
+				GGSEC_STATS_KIND_BOT,
+				GGSEC_STATS_KIND_UNVERIFIED,
+				ggsec_stats_unverified_cutoff(),
+				ggsec_stats_table(),
+				'' !== $last ? $last : '0000-00-00',
+				$start->format( 'Y-m-d' )
+			),
+			ARRAY_A
+		)
+	);
+	foreach ( $rows as $r ) {
+		if ( isset( $series[ $r['m'] ] ) ) {
+			$series[ $r['m'] ]['h'] += (int) $r['h'];
+			$series[ $r['m'] ]['b'] += (int) $r['b'];
+		}
+	}
+	return $series;
+}
+
+/**
+ * First day of the long-term history (daily table or raw hits), or '' without data.
+ */
+function ggsec_stats_history_start() {
+	global $wpdb;
+	$daily = (string) $wpdb->get_var( $wpdb->prepare( 'SELECT MIN(day) FROM %i', ggsec_stats_daily_table() ) );
+	$raw   = ggsec_stats_first_day();
+	if ( '' === $daily || '' === $raw ) {
+		return $daily . $raw;
+	}
+	return min( $daily, $raw );
 }
 
 function ggsec_stats_top_pages( $since, $until = null ) {
@@ -292,7 +373,7 @@ function ggsec_stats_suspicious_paths( $since, $until = null ) {
  *
  * @return array{scanner:int,sensitive:int,total:int}
  */
-function ggsec_stats_recon_summary( $since, $until = null ) {
+function ggsec_stats_recon_summary( $since, $until = null, $before = null ) {
 	global $wpdb;
 	$row = $wpdb->get_row(
 		$wpdb->prepare(
@@ -301,7 +382,7 @@ function ggsec_stats_recon_summary( $since, $until = null ) {
 			FROM (
 				SELECT (kind = %d AND bot_type = 'scanner') AS is_scanner,
 					(status IN (%d, %d) AND (kind = %d OR (kind = %d AND (status = %d OR created_at < %s))) AND path REGEXP %s) AS is_sensitive
-				FROM %i WHERE day BETWEEN %s AND %s
+				FROM %i WHERE day BETWEEN %s AND %s AND created_at < %s
 			) AS recon",
 			GGSEC_STATS_KIND_BOT,
 			GGSEC_STATS_STATUS_404,
@@ -313,7 +394,8 @@ function ggsec_stats_recon_summary( $since, $until = null ) {
 			ggsec_stats_sensitive_path_regex(),
 			ggsec_stats_table(),
 			$since,
-			ggsec_stats_until_day( $until )
+			ggsec_stats_until_day( $until ),
+			ggsec_stats_before_utc( $before )
 		),
 		ARRAY_A
 	);
@@ -342,6 +424,94 @@ function ggsec_stats_ai_pages( $since ) {
 		),
 		ARRAY_A
 	);
+}
+
+/**
+ * Human page views that arrived from AI assistants (by referrer host or utm_source).
+ *
+ * @return array{total:int,assistants:array<string,array{views:int,visitors:int}>,pages:array}
+ */
+function ggsec_stats_ai_referrals( $since, $until = null, $before = null ) {
+	global $wpdb;
+	$table = ggsec_stats_table();
+	$regex = ggsec_stats_ai_referrer_regex();
+
+	// Source = the referrer host if it is an assistant, otherwise the utm_source tag.
+	$sources = $wpdb->get_results(
+		$wpdb->prepare(
+			'SELECT IF(ref_host REGEXP %s, ref_host, utm_source) AS source, COUNT(*) AS views,
+				COUNT(DISTINCT CONCAT(day, visitor)) AS visitors
+			FROM %i WHERE day BETWEEN %s AND %s AND created_at < %s AND kind = %d AND status = %d
+				AND (ref_host REGEXP %s OR utm_source REGEXP %s)
+			GROUP BY source',
+			$regex,
+			$table,
+			$since,
+			ggsec_stats_until_day( $until ),
+			ggsec_stats_before_utc( $before ),
+			GGSEC_STATS_KIND_HUMAN,
+			GGSEC_STATS_STATUS_OK,
+			$regex,
+			$regex
+		),
+		ARRAY_A
+	);
+
+	$total      = 0;
+	$assistants = array();
+	foreach ( $sources as $r ) {
+		$name = ggsec_stats_ai_assistant_name( $r['source'] );
+		if ( null === $name ) {
+			continue;
+		}
+		if ( ! isset( $assistants[ $name ] ) ) {
+			$assistants[ $name ] = array(
+				'views'    => 0,
+				'visitors' => 0,
+			);
+		}
+		$assistants[ $name ]['views']    += (int) $r['views'];
+		$assistants[ $name ]['visitors'] += (int) $r['visitors'];
+		$total                           += (int) $r['views'];
+	}
+	uasort(
+		$assistants,
+		function ( $a, $b ) {
+			return $b['views'] <=> $a['views'];
+		}
+	);
+
+	$pages = $total ? $wpdb->get_results(
+		$wpdb->prepare(
+			'SELECT path, MAX(post_id) AS post_id, COUNT(*) AS views
+			FROM %i WHERE day BETWEEN %s AND %s AND created_at < %s AND kind = %d AND status = %d
+				AND (ref_host REGEXP %s OR utm_source REGEXP %s)
+			GROUP BY path ORDER BY views DESC LIMIT 10',
+			$table,
+			$since,
+			ggsec_stats_until_day( $until ),
+			ggsec_stats_before_utc( $before ),
+			GGSEC_STATS_KIND_HUMAN,
+			GGSEC_STATS_STATUS_OK,
+			$regex,
+			$regex
+		),
+		ARRAY_A
+	) : array();
+
+	return array(
+		'total'      => $total,
+		'assistants' => $assistants,
+		'pages'      => $pages,
+	);
+}
+
+/**
+ * First local day with recorded hits (Y-m-d), or '' when the table is empty.
+ */
+function ggsec_stats_first_day() {
+	global $wpdb;
+	return (string) $wpdb->get_var( $wpdb->prepare( 'SELECT MIN(day) FROM %i', ggsec_stats_table() ) );
 }
 
 /**
@@ -431,9 +601,10 @@ function ggsec_stats_badge( $text, $variant ) {
 /**
  * Stacked bar chart (humans bottom, bots top) as inline SVG; no JavaScript library.
  *
- * @param array<string,array{h:int,b:int}> $series
+ * @param array<string,array{h:int,b:int}> $series Keyed by day (Y-m-d) or month (Y-m).
+ * @param string                           $label  Accessible chart description.
  */
-function ggsec_stats_chart_svg( $series ) {
+function ggsec_stats_chart_svg( $series, $label = '' ) {
 	$w      = 760;
 	$h      = 200;
 	$pad_l  = 36;
@@ -447,7 +618,10 @@ function ggsec_stats_chart_svg( $series ) {
 	$slot   = ( $w - $pad_l ) / $n;
 	$bar_w  = max( 2, $slot * 0.7 );
 
-	$svg  = '<svg class="ggsec-stats-chart" viewBox="0 0 ' . $w . ' ' . $h . '" role="img" aria-label="' . esc_attr__( 'Humans and bots per day', 'ggsec-stats' ) . '">';
+	$label = '' !== $label ? $label : __( 'Humans and bots per day', 'ggsec-stats' );
+	$every = $n <= 12 ? 1 : 5;
+
+	$svg  = '<svg class="ggsec-stats-chart" viewBox="0 0 ' . $w . ' ' . $h . '" role="img" aria-label="' . esc_attr( $label ) . '">';
 	$svg .= '<line x1="' . $pad_l . '" y1="' . ( 8 + $plot_h ) . '" x2="' . $w . '" y2="' . ( 8 + $plot_h ) . '" class="axis"/>';
 	$svg .= '<text x="' . ( $pad_l - 6 ) . '" y="14" class="lbl" text-anchor="end">' . esc_html( number_format_i18n( $max ) ) . '</text>';
 	$svg .= '<text x="' . ( $pad_l - 6 ) . '" y="' . ( 8 + $plot_h ) . '" class="lbl" text-anchor="end">0</text>';
@@ -470,8 +644,10 @@ function ggsec_stats_chart_svg( $series ) {
 		$svg .= sprintf( '<rect class="h" x="%.1f" y="%.1f" width="%.1f" height="%.1f"/>', $x, $y0 - $hh, $bar_w, $hh );
 		$svg .= sprintf( '<rect class="b" x="%.1f" y="%.1f" width="%.1f" height="%.1f"/>', $x, $y0 - $hh - $bh, $bar_w, $bh );
 		$svg .= '</g>';
-		if ( 0 === $i % 5 || $i === $n - 1 ) {
-			$svg .= sprintf( '<text class="lbl" x="%.1f" y="%d" text-anchor="middle">%s</text>', $x + $bar_w / 2, $h - 6, esc_html( substr( $day, 5 ) ) );
+		if ( 0 === $i % $every || $i === $n - 1 ) {
+			// Days as "11-27", months as the short month name.
+			$text = 7 === strlen( $day ) ? date_i18n( 'M', (int) strtotime( $day . '-15' ) ) : substr( $day, 5 );
+			$svg .= sprintf( '<text class="lbl" x="%.1f" y="%d" text-anchor="middle">%s</text>', $x + $bar_w / 2, $h - 6, esc_html( $text ) );
 		}
 		$i++;
 	}
@@ -498,10 +674,46 @@ function ggsec_stats_admin_assets( $hook ) {
 add_action( 'admin_enqueue_scripts', 'ggsec_stats_admin_assets' );
 
 /**
- * One headline card. $value is a number or a short preformatted string (e.g. "42%").
+ * Change indicator for a card: [text, tone, tooltip] or null when there is nothing to compare.
+ *
+ * @param int         $current  Value in the shown period.
+ * @param int|null    $previous Value in the previous period; null when the previous period has no data yet.
+ * @param string      $rise     Tone of an increase: 'good', 'bad' or 'neutral'.
+ * @param string      $tooltip  What the value is compared with.
+ * @return array{0:string,1:string,2:string}|null
  */
-function ggsec_stats_card( $label, $value, $hint = '' ) {
-	echo '<div class="ggsec-stats-card"><span class="v">' . esc_html( is_int( $value ) ? number_format_i18n( $value ) : (string) $value ) . '</span>';
+function ggsec_stats_change( $current, $previous, $rise, $tooltip ) {
+	if ( null === $previous ) {
+		return null;
+	}
+	$text = ggsec_stats_mail_change( (int) $current, (int) $previous );
+	if ( '' === $text ) {
+		return null;
+	}
+	$fall = array(
+		'good'    => 'bad',
+		'bad'     => 'good',
+		'neutral' => 'neutral',
+	);
+	if ( (int) $current === (int) $previous ) {
+		$tone = 'neutral';
+	} else {
+		$tone = $current > $previous ? $rise : ( $fall[ $rise ] ?? 'neutral' );
+	}
+	return array( $text, $tone, $tooltip );
+}
+
+/**
+ * One headline card. $value is a number or a short preformatted string (e.g. "42%").
+ *
+ * @param array{0:string,1:string,2:string}|null $change Indicator from ggsec_stats_change().
+ */
+function ggsec_stats_card( $label, $value, $hint = '', $change = null ) {
+	echo '<div class="ggsec-stats-card"><span class="v">' . esc_html( is_int( $value ) ? number_format_i18n( $value ) : (string) $value );
+	if ( $change ) {
+		echo ' <span class="chg ' . esc_attr( $change[1] ) . '" title="' . esc_attr( $change[2] ) . '">' . esc_html( $change[0] ) . '</span>';
+	}
+	echo '</span>';
 	echo '<span class="l">' . esc_html( $label ) . '</span>';
 	if ( '' !== $hint ) {
 		echo '<span class="hint">' . esc_html( $hint ) . '</span>';
@@ -550,7 +762,8 @@ function ggsec_stats_render_page() {
 	if ( ! array_key_exists( $range, $ranges ) ) {
 		$range = 'today';
 	}
-	$since = ggsec_stats_since_day( $ranges[ $range ][0] );
+	$days  = $ranges[ $range ][0];
+	$since = ggsec_stats_since_day( $days );
 
 	$sum       = ggsec_stats_summary( $since );
 	$total     = $sum['human_views'] + $sum['bots'];
@@ -559,6 +772,30 @@ function ggsec_stats_render_page() {
 	$bots      = ggsec_stats_bot_breakdown( $since );
 	$recon     = ggsec_stats_recon_summary( $since );
 	$downloads = ggsec_stats_downloads( $since );
+	$ai_refs   = ggsec_stats_ai_referrals( $since );
+
+	// Previous period: the same number of days before, up to the same clock time (today 10:00 vs yesterday 10:00).
+	// Compared only when it lies completely within the recorded data.
+	$prev_since = ggsec_stats_since_day( 2 * $days );
+	$first_day  = ggsec_stats_first_day();
+	$prev       = array();
+	if ( '' !== $first_day && $prev_since >= $first_day ) {
+		$prev_until = ( new DateTimeImmutable( 'today', wp_timezone() ) )->modify( '-' . $days . ' days' )->format( 'Y-m-d' );
+		$before     = gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS );
+		$prev       = ggsec_stats_summary( $prev_since, $prev_until, $before );
+		$prev_recon = ggsec_stats_recon_summary( $prev_since, $prev_until, $before );
+		$prev_ai    = ggsec_stats_ai_referrals( $prev_since, $prev_until, $before );
+
+		$prev['recon'] = $prev_recon['total'];
+		$prev['ai']    = $prev_ai['total'];
+	}
+	$tooltip = 1 === $days
+		? __( 'Compared with yesterday up to the same time', 'ggsec-stats' )
+		/* translators: %d: number of days in the compared period. */
+		: sprintf( __( 'Compared with the previous %d days up to the same time', 'ggsec-stats' ), $days );
+	$change  = function ( $key, $current, $rise ) use ( $prev, $tooltip ) {
+		return ggsec_stats_change( $current, $prev[ $key ] ?? null, $rise, $tooltip );
+	};
 	?>
 	<div class="wrap ggsec-stats">
 		<h1><?php esc_html_e( 'GGSEC Stats', 'ggsec-stats' ); ?></h1>
@@ -572,14 +809,15 @@ function ggsec_stats_render_page() {
 
 		<div class="ggsec-stats-cards">
 			<?php
-			ggsec_stats_card( __( 'Human page views', 'ggsec-stats' ), $sum['human_views'] );
-			ggsec_stats_card( __( 'Unique visitors', 'ggsec-stats' ), $sum['visitors'], __( 'per day, summed', 'ggsec-stats' ) );
-			ggsec_stats_card( __( 'Known bots', 'ggsec-stats' ), $sum['bots_known'], __( 'identified by user agent', 'ggsec-stats' ) );
-			ggsec_stats_card( __( 'Bots without JS', 'ggsec-stats' ), $sum['bots_nojs'], __( 'browser-like, never rendered the page', 'ggsec-stats' ) );
+			ggsec_stats_card( __( 'Human page views', 'ggsec-stats' ), $sum['human_views'], '', $change( 'human_views', $sum['human_views'], 'good' ) );
+			ggsec_stats_card( __( 'Unique visitors', 'ggsec-stats' ), $sum['visitors'], __( 'per day, summed', 'ggsec-stats' ), $change( 'visitors', $sum['visitors'], 'good' ) );
+			ggsec_stats_card( __( 'From AI assistants', 'ggsec-stats' ), $ai_refs['total'], __( 'human views via ChatGPT, Perplexity, Claude, ...', 'ggsec-stats' ), $change( 'ai', $ai_refs['total'], 'good' ) );
+			ggsec_stats_card( __( 'Known bots', 'ggsec-stats' ), $sum['bots_known'], __( 'identified by user agent', 'ggsec-stats' ), $change( 'bots_known', $sum['bots_known'], 'neutral' ) );
+			ggsec_stats_card( __( 'Bots without JS', 'ggsec-stats' ), $sum['bots_nojs'], __( 'browser-like, never rendered the page', 'ggsec-stats' ), $change( 'bots_nojs', $sum['bots_nojs'], 'neutral' ) );
 			ggsec_stats_card( __( 'Bot share', 'ggsec-stats' ), $bot_share, __( 'of all page requests', 'ggsec-stats' ) );
-			ggsec_stats_card( __( 'Login/XML-RPC probes', 'ggsec-stats' ), $sum['probes'], __( 'failed logins, bot login scans, XML-RPC', 'ggsec-stats' ) );
+			ggsec_stats_card( __( 'Login/XML-RPC probes', 'ggsec-stats' ), $sum['probes'], __( 'failed logins, bot login scans, XML-RPC', 'ggsec-stats' ), $change( 'probes', $sum['probes'], 'bad' ) );
 			ggsec_stats_card( __( 'Online now', 'ggsec-stats' ), ggsec_stats_online_now(), __( 'humans, last 5 minutes', 'ggsec-stats' ) );
-			ggsec_stats_card( __( 'Downloads', 'ggsec-stats' ), $sum['downloads'], __( 'file links clicked by visitors', 'ggsec-stats' ) );
+			ggsec_stats_card( __( 'Downloads', 'ggsec-stats' ), $sum['downloads'], __( 'file links clicked by visitors', 'ggsec-stats' ), $change( 'downloads', $sum['downloads'], 'good' ) );
 			ggsec_stats_card(
 				__( 'Security recon', 'ggsec-stats' ),
 				$recon['total'],
@@ -588,7 +826,8 @@ function ggsec_stats_render_page() {
 					__( '%1$s from scanners, %2$s on sensitive paths (overlap counted once)', 'ggsec-stats' ),
 					number_format_i18n( $recon['scanner'] ),
 					number_format_i18n( $recon['sensitive'] )
-				)
+				),
+				$change( 'recon', $recon['total'], 'bad' )
 			);
 			?>
 		</div>
@@ -598,6 +837,28 @@ function ggsec_stats_render_page() {
 			<span class="ggsec-stats-legend"><i class="h"></i> <?php esc_html_e( 'humans', 'ggsec-stats' ); ?> <i class="b"></i> <?php esc_html_e( 'bots', 'ggsec-stats' ); ?></span>
 		</h2>
 		<?php echo wp_kses( ggsec_stats_chart_svg( ggsec_stats_daily_series( 30 ) ), ggsec_stats_allowed_svg() ); ?>
+
+		<?php
+		$history_start = ggsec_stats_history_start();
+		if ( '' !== $history_start ) :
+			?>
+			<h2>
+				<?php esc_html_e( 'Last 12 months', 'ggsec-stats' ); ?>
+				<span class="ggsec-stats-legend"><i class="h"></i> <?php esc_html_e( 'humans', 'ggsec-stats' ); ?> <i class="b"></i> <?php esc_html_e( 'bots', 'ggsec-stats' ); ?></span>
+			</h2>
+			<?php echo wp_kses( ggsec_stats_chart_svg( ggsec_stats_monthly_series(), __( 'Humans and bots per month', 'ggsec-stats' ) ), ggsec_stats_allowed_svg() ); ?>
+			<p class="description">
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: %s: date the statistics history starts. */
+						__( 'History since %s. Daily totals are kept after the raw data is deleted, so this chart keeps growing.', 'ggsec-stats' ),
+						date_i18n( get_option( 'date_format' ), (int) strtotime( $history_start . ' 12:00' ) )
+					)
+				);
+				?>
+			</p>
+		<?php endif; ?>
 
 		<div class="ggsec-stats-grid">
 			<section>
@@ -717,6 +978,32 @@ function ggsec_stats_render_page() {
 				}
 				ggsec_stats_table_html( array( __( 'Page', 'ggsec-stats' ), __( 'Crawlers', 'ggsec-stats' ), __( 'Fetches', 'ggsec-stats' ) ), $rows );
 				?>
+			</section>
+
+			<section>
+				<h2><?php esc_html_e( 'Visitors from AI assistants', 'ggsec-stats' ); ?></h2>
+				<?php
+				$rows = array();
+				foreach ( $ai_refs['assistants'] as $name => $r ) {
+					$rows[] = array( esc_html( $name ), ggsec_stats_num( $r['views'] ), ggsec_stats_num( $r['visitors'] ) );
+				}
+				ggsec_stats_table_html( array( __( 'Assistant', 'ggsec-stats' ), __( 'Views', 'ggsec-stats' ), __( 'Visitors', 'ggsec-stats' ) ), $rows );
+				if ( $ai_refs['pages'] ) :
+					?>
+					<h3><?php esc_html_e( 'Landing pages', 'ggsec-stats' ); ?></h3>
+					<?php
+					$rows = array();
+					foreach ( $ai_refs['pages'] as $r ) {
+						$title  = $r['post_id'] ? get_the_title( (int) $r['post_id'] ) : '';
+						$rows[] = array(
+							esc_html( $r['path'] ) . ( '' !== $title ? '<br><small>' . esc_html( $title ) . '</small>' : '' ),
+							ggsec_stats_num( $r['views'] ),
+						);
+					}
+					ggsec_stats_table_html( array( __( 'Page', 'ggsec-stats' ), __( 'Views', 'ggsec-stats' ) ), $rows );
+				endif;
+				?>
+				<p class="description"><?php esc_html_e( 'Real visitors who followed a link in an AI assistant answer (referrer or utm_source of ChatGPT, Perplexity, Claude, Copilot, Gemini and others). AI crawlers fetching pages are listed separately above.', 'ggsec-stats' ); ?></p>
 			</section>
 
 			<section>

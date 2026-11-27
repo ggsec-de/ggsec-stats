@@ -4,7 +4,7 @@ Tags: analytics, statistics, privacy, bots, security
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,10 +19,13 @@ Every request is recorded on the server, so bots and clients without JavaScript 
 = Features =
 
 * **Humans vs. bots** - human page views, unique visitors, known bots, browser-like clients that never ran JavaScript, bot share and visitors online now.
+* **Change indicators** - every headline number shows its change against the previous period, compared up to the same time of day.
 * **30-day chart** of humans and bots, rendered as inline SVG (no JavaScript chart library).
+* **12-month history** - daily totals are kept after the raw data is deleted, for a monthly chart of the last 12 months.
 * **Top pages** and **referrers** (source sites, full referring URLs without query strings, `utm_source` / `ref` campaign tags).
 * **Bot breakdown** by name and type: search engines, AI crawlers, SEO tools, social previews, monitoring services, security scanners and HTTP libraries.
 * **Pages read by AI crawlers** (GPTBot, ClaudeBot, PerplexityBot and others).
+* **Visitors from AI assistants** - real visitors who followed a link in ChatGPT, Perplexity, Claude, Copilot, Gemini and other assistants, with their landing pages.
 * **Security reconnaissance** - failed logins, bot scans of the login page, XML-RPC requests, 404 requests from non-humans and requests for sensitive paths such as `.env`, `.git` or backup archives.
 * **Broken links** - 404 pages opened by real visitors, with the referring site.
 * **File downloads** - clicks by real visitors on links to PDF, ZIP and other files on your site.
@@ -38,7 +41,7 @@ Every request is recorded on the server, so bots and clients without JavaScript 
 * Raw IP addresses are never stored. A visitor is counted with a truncated HMAC-SHA256 of IP address, user agent and date, keyed with a random salt that is replaced every day. The old salt is deleted, so visitors cannot be recognised across days and the hash cannot be reversed.
 * Query strings are removed from recorded paths and referrers.
 * The user agent of a confirmed human visit is erased; it is kept only for bots and unconfirmed requests.
-* Raw data is deleted automatically after 90 days.
+* Raw data is deleted automatically after 90 days. Only daily totals (numbers, no personal data) are kept for the long-term history.
 * Logged-in editors and administrators are not counted.
 
 The plugin adds a suggested text to the privacy policy guide (Settings > Privacy).
@@ -77,9 +80,17 @@ Many scanners pretend to be a browser. A request is counted as human only when t
 
 Only if you enable it under **Dashboard > GGSEC Stats > E-mail reports and alerts**; reports and alerts are off by default. Mails are sent with your site's own mail setup (`wp_mail`) to the administration e-mail address or a recipient you choose. They contain aggregate numbers, paths, bot names and user agents only, no IP addresses. Alerts are checked hourly by WP-Cron and sent at most once every 6 hours per kind.
 
+= How are visitors from AI assistants detected? =
+
+By the referring site (chatgpt.com, perplexity.ai, claude.ai, copilot.microsoft.com, gemini.google.com and others) or by the `utm_source` tag that ChatGPT adds to its links. Only page views confirmed as human are counted. The list can be changed with the `ggsec_stats_ai_referrers` filter.
+
+= How long is the history kept? =
+
+Raw hits are deleted after 90 days (or `GGSEC_STATS_RETENTION_DAYS`). Before that, each finished day is stored as one row of totals (human views, visitors, bots, probes, downloads, security recon, AI referrals), which is kept until the plugin is deleted. Existing data is aggregated automatically when you update to 1.5.0.
+
 = What happens on uninstall? =
 
-Deleting the plugin from the Plugins screen drops its database table and removes its options and scheduled events.
+Deleting the plugin from the Plugins screen drops its database tables and removes its options and scheduled events.
 
 == Screenshots ==
 
@@ -89,6 +100,11 @@ Deleting the plugin from the Plugins screen drops its database table and removes
 4. Dashboard widget with today's numbers.
 
 == Changelog ==
+
+= 1.5.0 =
+* Change indicators on the headline cards, compared with the previous period up to the same time of day.
+* Visitors from AI assistants (ChatGPT, Perplexity, Claude, Copilot, Gemini and others): card, table with landing pages and a section in the e-mail report.
+* Long-term history: daily totals are kept after raw data cleanup; new chart of the last 12 months.
 
 = 1.4.0 =
 * Optional e-mail reports (daily or weekly) with a comparison to the previous period.
@@ -117,6 +133,9 @@ Deleting the plugin from the Plugins screen drops its database table and removes
 * First release.
 
 == Upgrade Notice ==
+
+= 1.5.0 =
+Change indicators, visitors from AI assistants and a 12-month history chart. Existing data is aggregated on update.
 
 = 1.4.0 =
 Optional e-mail reports and security alerts. Off by default; enable them under Dashboard > GGSEC Stats.

@@ -18,6 +18,7 @@ No cookies, no browser storage, no external services, and no raw IP addresses st
   - Classifies search engines, AI crawlers (`GPTBot`, `ClaudeBot`, `PerplexityBot`, `Applebot-Extended`, etc.), SEO tools, social previews, monitoring services, security scanners (`Nuclei`, `WPScan`, `sqlmap`, `Nikto`, `Censys`, etc.), and HTTP libraries.
   - Dedicated **Pages read by AI crawlers** table showing which content is being fetched by AI models.
   - Separate counter and User-Agent breakdown for browser-like clients that never execute JavaScript.
+  - **Visitors from AI assistants:** confirmed human views referred by ChatGPT, Perplexity, Claude, Copilot, Gemini and others (referrer host or `utm_source`; list filterable via `ggsec_stats_ai_referrers`).
 - **Security Reconnaissance & Broken Links:**
   - Tracks failed login attempts (`wp_login_failed`), bot login discovery scans (`wp-login.php`), and `xmlrpc.php` probes.
   - Distinguishes **Broken links** (404 pages reached by confirmed human visitors, including the referring host) from **Suspicious requests** (non-human 404s and login/XML-RPC probes).
@@ -32,6 +33,10 @@ No cookies, no browser storage, no external services, and no raw IP addresses st
   - Off by default; configured under **Dashboard > GGSEC Stats**. Mails contain aggregate data only (no IP addresses or visitor hashes).
 - **Zero Admin Dependencies:**
   - Renders the 30-day stacked bar chart (humans vs. bots) as inline SVG in PHP without external JavaScript charting libraries.
+  - Headline cards show the change against the previous period, cut at the same time of day.
+- **Long-term History:**
+  - The daily cron aggregates each finished day into `{$wpdb->prefix}ggsec_stats_daily` (counts only, no personal data) before raw hits past the retention period are deleted; a day is never deleted before it is aggregated.
+  - Monthly chart of the last 12 months; existing raw data is backfilled on update.
   - Includes a compact WordPress Dashboard widget.
 
 ## Requirements
@@ -57,7 +62,7 @@ define( 'GGSEC_STATS_DAILY_CLIENT_CAP', 500 );
 
 ## Uninstall
 
-When deleted through the WordPress Plugins screen, `uninstall.php` drops the `{$wpdb->prefix}ggsec_stats_hits` table, removes plugin options (`ggsec_stats_db_version`, `ggsec_stats_salt`, `ggsec_stats_salt_day`, `ggsec_stats_notify`, `ggsec_stats_notify_state`), and clears the daily cleanup and hourly notification cron hooks.
+When deleted through the WordPress Plugins screen, `uninstall.php` drops the `{$wpdb->prefix}ggsec_stats_hits` and `{$wpdb->prefix}ggsec_stats_daily` tables, removes plugin options (`ggsec_stats_db_version`, `ggsec_stats_salt`, `ggsec_stats_salt_day`, `ggsec_stats_notify`, `ggsec_stats_notify_state`, `ggsec_stats_purged_before`), and clears the daily cleanup and hourly notification cron hooks.
 
 ## License
 

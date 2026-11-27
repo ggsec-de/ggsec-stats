@@ -204,6 +204,69 @@ function ggsec_stats_is_sensitive_path( $path ) {
 	return (bool) preg_match( '~' . str_replace( '~', '\~', ggsec_stats_sensitive_path_regex() ) . '~i', (string) $path );
 }
 
+/**
+ * AI assistants that send visitors to the site: referrer host (without "www.") => display name.
+ * The same hosts are matched against utm_source, because ChatGPT tags its links with utm_source=chatgpt.com
+ * and its apps often send no referrer.
+ *
+ * @return array<string,string>
+ */
+function ggsec_stats_ai_referrers() {
+	$hosts = array(
+		'chatgpt.com'           => 'ChatGPT',
+		'chat.openai.com'       => 'ChatGPT',
+		'perplexity.ai'         => 'Perplexity',
+		'claude.ai'             => 'Claude',
+		'copilot.microsoft.com' => 'Microsoft Copilot',
+		'gemini.google.com'     => 'Google Gemini',
+		'chat.mistral.ai'       => 'Mistral Le Chat',
+		'chat.deepseek.com'     => 'DeepSeek',
+		'meta.ai'               => 'Meta AI',
+		'grok.com'              => 'Grok',
+		'you.com'               => 'You.com',
+		'phind.com'             => 'Phind',
+		'poe.com'               => 'Poe',
+	);
+
+	/**
+	 * Filter the AI assistant referrer list (host without "www." => display name).
+	 */
+	$hosts = (array) apply_filters( 'ggsec_stats_ai_referrers', $hosts );
+
+	// Hosts end up in a regular expression; only plain host names are accepted.
+	$clean = array();
+	foreach ( $hosts as $host => $name ) {
+		$host = strtolower( (string) $host );
+		if ( preg_match( '/^[a-z0-9-]+(\.[a-z0-9-]+)+$/', $host ) ) {
+			$clean[ $host ] = (string) $name;
+		}
+	}
+	return $clean;
+}
+
+/**
+ * Regular expression matching a referrer host or utm_source of an AI assistant, for MySQL/MariaDB REGEXP
+ * (whole value, optional "www."). Matches nothing when the list is empty.
+ */
+function ggsec_stats_ai_referrer_regex() {
+	$hosts = array_map(
+		function ( $host ) {
+			return str_replace( '.', '\.', $host );
+		},
+		array_keys( ggsec_stats_ai_referrers() )
+	);
+	return $hosts ? '^(www\.)?(' . implode( '|', $hosts ) . ')$' : '^$.';
+}
+
+/**
+ * Assistant name for a referrer host or utm_source value, or null if it is not an AI assistant.
+ */
+function ggsec_stats_ai_assistant_name( $value ) {
+	$value = preg_replace( '/^www\./', '', strtolower( trim( (string) $value ) ) );
+	$list  = ggsec_stats_ai_referrers();
+	return $list[ $value ] ?? null;
+}
+
 function ggsec_stats_bot_type_label( $type ) {
 	$labels = array(
 		'search'  => __( 'Search engine', 'ggsec-stats' ),

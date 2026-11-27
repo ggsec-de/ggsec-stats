@@ -28,6 +28,21 @@
 	color: #8c8f94;
 	font-size: 11px;
 }
+.ggsec-stats-card .chg {
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: help;
+}
+.ggsec-stats-card .chg.good {
+	color: #008a20;
+}
+.ggsec-stats-card .chg.bad {
+	color: #d63638;
+}
+.ggsec-stats-card .chg.neutral {
+	color: #646970;
+}
 .ggsec-stats-chart {
 	width: 100%;
 	max-width: 960px;

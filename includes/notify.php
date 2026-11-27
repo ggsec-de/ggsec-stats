@@ -405,6 +405,27 @@ function ggsec_stats_build_report( $frequency, DateTimeImmutable $now ) {
 	$body .= ggsec_stats_mail_heading( __( 'Top referrers', 'ggsec-stats' ) )
 		. ggsec_stats_mail_table( array( __( 'Source site', 'ggsec-stats' ), __( 'Views', 'ggsec-stats' ) ), $rows );
 
+	// Shown only when there were such visits, to keep the report short for sites without them.
+	$ai_refs = ggsec_stats_ai_referrals( $from, $to );
+	if ( $ai_refs['total'] ) {
+		$prev_ai = ggsec_stats_ai_referrals( $prev_from, $prev_to );
+		$rows    = array();
+		foreach ( array_slice( $ai_refs['assistants'], 0, 5, true ) as $name => $r ) {
+			$rows[] = array( $name, number_format_i18n( $r['views'] ), number_format_i18n( $r['visitors'] ) );
+		}
+		$change = ggsec_stats_mail_change( $ai_refs['total'], $prev_ai['total'] );
+		$body  .= ggsec_stats_mail_heading(
+			trim(
+				sprintf(
+					/* translators: 1: number of human page views from AI assistants, 2: change vs previous period (may be empty). */
+					__( 'Visitors from AI assistants: %1$s %2$s', 'ggsec-stats' ),
+					number_format_i18n( $ai_refs['total'] ),
+					'' !== $change ? '(' . $change . ')' : ''
+				)
+			)
+		) . ggsec_stats_mail_table( array( __( 'Assistant', 'ggsec-stats' ), __( 'Views', 'ggsec-stats' ), __( 'Visitors', 'ggsec-stats' ) ), $rows, 1 );
+	}
+
 	$bots = ggsec_stats_bot_breakdown( $from, $to );
 	$rows = array();
 	foreach ( array_slice( $bots['known'], 0, 5 ) as $r ) {
