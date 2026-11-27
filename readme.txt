@@ -4,7 +4,7 @@ Tags: analytics, statistics, privacy, bots, security
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,6 +26,8 @@ Every request is recorded on the server, so bots and clients without JavaScript 
 * **Security reconnaissance** - failed logins, bot scans of the login page, XML-RPC requests, 404 requests from non-humans and requests for sensitive paths such as `.env`, `.git` or backup archives.
 * **Broken links** - 404 pages opened by real visitors, with the referring site.
 * **File downloads** - clicks by real visitors on links to PDF, ZIP and other files on your site.
+* **E-mail reports** - optional daily or weekly summary: visitors, bots, top pages, referrers and suspicious requests, compared with the previous period.
+* **Security alerts** - optional e-mail when a login attack (failed logins, login scans, XML-RPC) or a vulnerability scan exceeds a threshold within one hour.
 * **Dashboard widget** with today's numbers.
 * **Flood guard** - aggressive scanners cannot fill your database.
 
@@ -71,9 +73,13 @@ Logged-in users who can edit posts are excluded so the site owner and editors do
 
 Many scanners pretend to be a browser. A request is counted as human only when the browser confirms that the page was shown; requests that never confirm are listed as "Bots without JS".
 
+= Does the plugin send e-mail? =
+
+Only if you enable it under **Dashboard > GGSEC Stats > E-mail reports and alerts**; reports and alerts are off by default. Mails are sent with your site's own mail setup (`wp_mail`) to the administration e-mail address or a recipient you choose. They contain aggregate numbers, paths, bot names and user agents only, no IP addresses. Alerts are checked hourly by WP-Cron and sent at most once every 6 hours per kind.
+
 = What happens on uninstall? =
 
-Deleting the plugin from the Plugins screen drops its database table and removes its options and scheduled event.
+Deleting the plugin from the Plugins screen drops its database table and removes its options and scheduled events.
 
 == Screenshots ==
 
@@ -83,6 +89,11 @@ Deleting the plugin from the Plugins screen drops its database table and removes
 4. Dashboard widget with today's numbers.
 
 == Changelog ==
+
+= 1.4.0 =
+* Optional e-mail reports (daily or weekly) with a comparison to the previous period.
+* Optional security alerts for login attacks and vulnerability scans, with configurable hourly thresholds and a 6-hour cooldown.
+* "Save and send a test report" button to check the mail setup.
 
 = 1.3.1 =
 * The statistics page moved from a top-level admin menu item to **Dashboard > GGSEC Stats**.
@@ -106,6 +117,9 @@ Deleting the plugin from the Plugins screen drops its database table and removes
 * First release.
 
 == Upgrade Notice ==
+
+= 1.4.0 =
+Optional e-mail reports and security alerts. Off by default; enable them under Dashboard > GGSEC Stats.
 
 = 1.3.1 =
 The statistics page is now under Dashboard > GGSEC Stats.

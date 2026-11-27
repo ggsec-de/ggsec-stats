@@ -14,4 +14,7 @@ $wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $wpdb->prefix . 'ggsec_
 delete_option( 'ggsec_stats_db_version' );
 delete_option( 'ggsec_stats_salt' );
 delete_option( 'ggsec_stats_salt_day' );
+delete_option( 'ggsec_stats_notify' );
+delete_option( 'ggsec_stats_notify_state' );
 wp_clear_scheduled_hook( 'ggsec_stats_daily' );
+wp_clear_scheduled_hook( 'ggsec_stats_hourly' );

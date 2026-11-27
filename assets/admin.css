@@ -92,3 +92,15 @@
 .ggsec-stats details {
 	margin-top: 8px;
 }
+#ggsec-stats-notify {
+	margin-top: 32px;
+	padding-top: 16px;
+	border-top: 1px solid #dcdcde;
+}
+.ggsec-stats-notify {
+	max-width: 900px;
+}
+.ggsec-stats-notify .form-table td label {
+	display: inline-block;
+	margin: 4px 0;
+}
