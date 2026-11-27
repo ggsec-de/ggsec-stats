@@ -3,7 +3,7 @@
  * Plugin Name:       GGSEC Stats
  * Plugin URI:        https://github.com/ggsec-de/ggsec-stats
  * Description:       Privacy-first page view statistics: humans vs bots, referrers, top pages, online now. No cookies, no external services.
- * Version:           1.3.1
+ * Version:           1.4.0
  * Requires at least: 6.3
  * Requires PHP:      7.4
  * Author:            GG Advanced IT Security UG
@@ -21,8 +21,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const GGSEC_STATS_VERSION    = '1.3.1';
-const GGSEC_STATS_DB_VERSION = '2';
+const GGSEC_STATS_VERSION    = '1.4.0';
+// Bumped also when scheduled events change: ggsec_stats_maybe_upgrade() then re-runs the install routine,
+// which schedules missing events on sites updated without re-activation (WordPress.org updates, FTP).
+const GGSEC_STATS_DB_VERSION = '3';
 
 // Hit kinds.
 const GGSEC_STATS_KIND_UNVERIFIED = 0; // Page served, browser beacon not (yet) received.
@@ -45,6 +47,7 @@ define( 'GGSEC_STATS_DIR', plugin_dir_path( __FILE__ ) );
 require_once GGSEC_STATS_DIR . 'includes/bots.php';
 require_once GGSEC_STATS_DIR . 'includes/tracker.php';
 require_once GGSEC_STATS_DIR . 'includes/admin.php';
+require_once GGSEC_STATS_DIR . 'includes/notify.php';
 
 function ggsec_stats_table() {
 	global $wpdb;
@@ -103,6 +106,10 @@ function ggsec_stats_install() {
 	if ( ! wp_next_scheduled( 'ggsec_stats_daily' ) ) {
 		wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'ggsec_stats_daily' );
 	}
+	// E-mail reports and alerts (does nothing until enabled in the settings).
+	if ( ! wp_next_scheduled( 'ggsec_stats_hourly' ) ) {
+		wp_schedule_event( time() + 5 * MINUTE_IN_SECONDS, 'hourly', 'ggsec_stats_hourly' );
+	}
 }
 register_activation_hook( __FILE__, 'ggsec_stats_install' );
 
@@ -116,6 +123,7 @@ add_action( 'plugins_loaded', 'ggsec_stats_maybe_upgrade' );
 
 function ggsec_stats_deactivate() {
 	wp_clear_scheduled_hook( 'ggsec_stats_daily' );
+	wp_clear_scheduled_hook( 'ggsec_stats_hourly' );
 }
 register_deactivation_hook( __FILE__, 'ggsec_stats_deactivate' );
 

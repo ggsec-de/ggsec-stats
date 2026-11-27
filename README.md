@@ -26,6 +26,10 @@ No cookies, no browser storage, no external services, and no raw IP addresses st
   - Counts clicks (including middle-click) by confirmed human visitors on same-site links to downloadable files (`pdf`, `zip`, `7z`, `tar`, `gz`, `bin`, `asc`, `gpg`, etc.), authenticated with the page view's HMAC token.
 - **Built-in Flood Guard:**
   - Caps recorded hits per client hash per day (`GGSEC_STATS_DAILY_CLIENT_CAP`, default `500`) using a bounded covering-index lookup so aggressive vulnerability scanners cannot bloat the database.
+- **E-mail Reports & Security Alerts (opt-in):**
+  - Daily or weekly HTML report (headline numbers vs. the previous period, top pages, referrers, bots, suspicious requests), sent through `wp_mail()` from an hourly WP-Cron event.
+  - Alerts when failed logins / login scans / XML-RPC requests or scanner / sensitive-path requests within one hour reach a configurable threshold; at most one alert per kind every 6 hours.
+  - Off by default; configured under **Dashboard > GGSEC Stats**. Mails contain aggregate data only (no IP addresses or visitor hashes).
 - **Zero Admin Dependencies:**
   - Renders the 30-day stacked bar chart (humans vs. bots) as inline SVG in PHP without external JavaScript charting libraries.
   - Includes a compact WordPress Dashboard widget.
@@ -39,7 +43,7 @@ No cookies, no browser storage, no external services, and no raw IP addresses st
 
 1. Copy the `ggsec-stats` directory into `wp-content/plugins/`.
 2. Activate **GGSEC Stats** in the WordPress admin panel (**Plugins**).
-3. Open **GGSEC Stats** in the admin sidebar to view statistics.
+3. Open **Dashboard > GGSEC Stats** to view statistics and configure e-mail reports and alerts.
 
 ## Optional Configuration (`wp-config.php`)
 
@@ -53,7 +57,7 @@ define( 'GGSEC_STATS_DAILY_CLIENT_CAP', 500 );
 
 ## Uninstall
 
-When deleted through the WordPress Plugins screen, `uninstall.php` drops the `{$wpdb->prefix}ggsec_stats_hits` table, removes plugin options (`ggsec_stats_db_version`, `ggsec_stats_salt`, `ggsec_stats_salt_day`), and clears the daily cleanup cron hook.
+When deleted through the WordPress Plugins screen, `uninstall.php` drops the `{$wpdb->prefix}ggsec_stats_hits` table, removes plugin options (`ggsec_stats_db_version`, `ggsec_stats_salt`, `ggsec_stats_salt_day`, `ggsec_stats_notify`, `ggsec_stats_notify_state`), and clears the daily cleanup and hourly notification cron hooks.
 
 ## License
 
