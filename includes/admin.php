@@ -29,6 +29,13 @@ function ggsec_stats_since_day( $days ) {
 }
 
 /**
+ * Last local day (Y-m-d) of a report range; defaults to today, so dashboard ranges end today.
+ */
+function ggsec_stats_until_day( $until = null ) {
+	return null === $until ? current_time( 'Y-m-d' ) : (string) $until;
+}
+
+/**
  * Unverified hits created before this UTC time never got a beacon and are reported as bots.
  */
 function ggsec_stats_unverified_cutoff() {
@@ -51,7 +58,7 @@ function ggsec_stats_unverified_cutoff() {
  *
  * @return array<string,int>
  */
-function ggsec_stats_summary( $since ) {
+function ggsec_stats_summary( $since, $until = null ) {
 	global $wpdb;
 	$row = $wpdb->get_row(
 		$wpdb->prepare(
@@ -62,7 +69,7 @@ function ggsec_stats_summary( $since ) {
 				SUM(kind = %d AND status <> %d AND created_at < %s) AS bots_nojs,
 				SUM(status = %d) AS probes,
 				SUM(status = %d) AS downloads
-			FROM %i WHERE day >= %s',
+			FROM %i WHERE day BETWEEN %s AND %s',
 			GGSEC_STATS_KIND_HUMAN,
 			GGSEC_STATS_STATUS_OK,
 			GGSEC_STATS_KIND_HUMAN,
@@ -75,7 +82,8 @@ function ggsec_stats_summary( $since ) {
 			GGSEC_STATS_STATUS_PROBE,
 			GGSEC_STATS_STATUS_DOWNLOAD,
 			ggsec_stats_table(),
-			$since
+			$since,
+			ggsec_stats_until_day( $until )
 		),
 		ARRAY_A
 	);
@@ -141,14 +149,15 @@ function ggsec_stats_daily_series( $days ) {
 	return $series;
 }
 
-function ggsec_stats_top_pages( $since ) {
+function ggsec_stats_top_pages( $since, $until = null ) {
 	global $wpdb;
 	return $wpdb->get_results(
 		$wpdb->prepare(
 			'SELECT path, MAX(post_id) AS post_id, COUNT(*) AS views, COUNT(DISTINCT CONCAT(day, visitor)) AS visitors
-			FROM %i WHERE day >= %s AND kind = %d AND status = %d GROUP BY path ORDER BY views DESC LIMIT 15',
+			FROM %i WHERE day BETWEEN %s AND %s AND kind = %d AND status = %d GROUP BY path ORDER BY views DESC LIMIT 15',
 			ggsec_stats_table(),
 			$since,
+			ggsec_stats_until_day( $until ),
 			GGSEC_STATS_KIND_HUMAN,
 			GGSEC_STATS_STATUS_OK
 		),
@@ -156,16 +165,17 @@ function ggsec_stats_top_pages( $since ) {
 	);
 }
 
-function ggsec_stats_top_referrers( $since ) {
+function ggsec_stats_top_referrers( $since, $until = null ) {
 	global $wpdb;
 	$table = ggsec_stats_table();
 	return array(
 		'hosts' => $wpdb->get_results(
 			$wpdb->prepare(
 				'SELECT ref_host, COUNT(*) AS views FROM %i
-				WHERE day >= %s AND kind = %d AND status = %d AND ref_host IS NOT NULL GROUP BY ref_host ORDER BY views DESC LIMIT 15',
+				WHERE day BETWEEN %s AND %s AND kind = %d AND status = %d AND ref_host IS NOT NULL GROUP BY ref_host ORDER BY views DESC LIMIT 15',
 				$table,
 				$since,
+				ggsec_stats_until_day( $until ),
 				GGSEC_STATS_KIND_HUMAN,
 				GGSEC_STATS_STATUS_OK
 			),
@@ -174,9 +184,10 @@ function ggsec_stats_top_referrers( $since ) {
 		'urls'  => $wpdb->get_results(
 			$wpdb->prepare(
 				'SELECT ref_host, ref_path, COUNT(*) AS views FROM %i
-				WHERE day >= %s AND kind = %d AND status = %d AND ref_host IS NOT NULL GROUP BY ref_host, ref_path ORDER BY views DESC LIMIT 20',
+				WHERE day BETWEEN %s AND %s AND kind = %d AND status = %d AND ref_host IS NOT NULL GROUP BY ref_host, ref_path ORDER BY views DESC LIMIT 20',
 				$table,
 				$since,
+				ggsec_stats_until_day( $until ),
 				GGSEC_STATS_KIND_HUMAN,
 				GGSEC_STATS_STATUS_OK
 			),
@@ -185,9 +196,10 @@ function ggsec_stats_top_referrers( $since ) {
 		'utm'   => $wpdb->get_results(
 			$wpdb->prepare(
 				'SELECT utm_source, COUNT(*) AS views FROM %i
-				WHERE day >= %s AND kind = %d AND status = %d AND utm_source IS NOT NULL GROUP BY utm_source ORDER BY views DESC LIMIT 10',
+				WHERE day BETWEEN %s AND %s AND kind = %d AND status = %d AND utm_source IS NOT NULL GROUP BY utm_source ORDER BY views DESC LIMIT 10',
 				$table,
 				$since,
+				ggsec_stats_until_day( $until ),
 				GGSEC_STATS_KIND_HUMAN,
 				GGSEC_STATS_STATUS_OK
 			),
@@ -196,16 +208,17 @@ function ggsec_stats_top_referrers( $since ) {
 	);
 }
 
-function ggsec_stats_bot_breakdown( $since ) {
+function ggsec_stats_bot_breakdown( $since, $until = null ) {
 	global $wpdb;
 	$table = ggsec_stats_table();
 	return array(
 		'known' => $wpdb->get_results(
 			$wpdb->prepare(
 				'SELECT bot_name, bot_type, COUNT(*) AS hits, MAX(ua) AS sample_ua FROM %i
-				WHERE day >= %s AND kind = %d AND status <> %d GROUP BY bot_name, bot_type ORDER BY hits DESC LIMIT 30',
+				WHERE day BETWEEN %s AND %s AND kind = %d AND status <> %d GROUP BY bot_name, bot_type ORDER BY hits DESC LIMIT 30',
 				$table,
 				$since,
+				ggsec_stats_until_day( $until ),
 				GGSEC_STATS_KIND_BOT,
 				GGSEC_STATS_STATUS_PROBE
 			),
@@ -214,9 +227,10 @@ function ggsec_stats_bot_breakdown( $since ) {
 		'nojs'  => $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT COALESCE(ua, '') AS ua, COUNT(*) AS hits FROM %i
-				WHERE day >= %s AND kind = %d AND status <> %d AND created_at < %s GROUP BY ua ORDER BY hits DESC LIMIT 10",
+				WHERE day BETWEEN %s AND %s AND kind = %d AND status <> %d AND created_at < %s GROUP BY ua ORDER BY hits DESC LIMIT 10",
 				$table,
 				$since,
+				ggsec_stats_until_day( $until ),
 				GGSEC_STATS_KIND_UNVERIFIED,
 				GGSEC_STATS_STATUS_PROBE,
 				ggsec_stats_unverified_cutoff()
@@ -229,14 +243,15 @@ function ggsec_stats_bot_breakdown( $since ) {
 /**
  * 404 pages opened by confirmed humans: broken links (internal or from referring sites).
  */
-function ggsec_stats_broken_links( $since ) {
+function ggsec_stats_broken_links( $since, $until = null ) {
 	global $wpdb;
 	return $wpdb->get_results(
 		$wpdb->prepare(
 			'SELECT path, MAX(ref_host) AS ref_host, COUNT(*) AS hits FROM %i
-			WHERE day >= %s AND kind = %d AND status = %d GROUP BY path ORDER BY hits DESC LIMIT 20',
+			WHERE day BETWEEN %s AND %s AND kind = %d AND status = %d GROUP BY path ORDER BY hits DESC LIMIT 20',
 			ggsec_stats_table(),
 			$since,
+			ggsec_stats_until_day( $until ),
 			GGSEC_STATS_KIND_HUMAN,
 			GGSEC_STATS_STATUS_404
 		),
@@ -248,16 +263,17 @@ function ggsec_stats_broken_links( $since ) {
  * 404s and probes from non-humans. Unverified 404s are only listed after the beacon grace period,
  * so a real visitor's 404 does not flash up here before the browser confirms it.
  */
-function ggsec_stats_suspicious_paths( $since ) {
+function ggsec_stats_suspicious_paths( $since, $until = null ) {
 	global $wpdb;
 	return $wpdb->get_results(
 		$wpdb->prepare(
 			'SELECT path, status, COUNT(*) AS hits FROM %i
-			WHERE day >= %s AND status IN (%d, %d)
+			WHERE day BETWEEN %s AND %s AND status IN (%d, %d)
 				AND (kind = %d OR (kind = %d AND (status = %d OR created_at < %s)))
 			GROUP BY path, status ORDER BY hits DESC LIMIT 25',
 			ggsec_stats_table(),
 			$since,
+			ggsec_stats_until_day( $until ),
 			GGSEC_STATS_STATUS_404,
 			GGSEC_STATS_STATUS_PROBE,
 			GGSEC_STATS_KIND_BOT,
@@ -276,7 +292,7 @@ function ggsec_stats_suspicious_paths( $since ) {
  *
  * @return array{scanner:int,sensitive:int,total:int}
  */
-function ggsec_stats_recon_summary( $since ) {
+function ggsec_stats_recon_summary( $since, $until = null ) {
 	global $wpdb;
 	$row = $wpdb->get_row(
 		$wpdb->prepare(
@@ -285,7 +301,7 @@ function ggsec_stats_recon_summary( $since ) {
 			FROM (
 				SELECT (kind = %d AND bot_type = 'scanner') AS is_scanner,
 					(status IN (%d, %d) AND (kind = %d OR (kind = %d AND (status = %d OR created_at < %s))) AND path REGEXP %s) AS is_sensitive
-				FROM %i WHERE day >= %s
+				FROM %i WHERE day BETWEEN %s AND %s
 			) AS recon",
 			GGSEC_STATS_KIND_BOT,
 			GGSEC_STATS_STATUS_404,
@@ -296,7 +312,8 @@ function ggsec_stats_recon_summary( $since ) {
 			ggsec_stats_unverified_cutoff(),
 			ggsec_stats_sensitive_path_regex(),
 			ggsec_stats_table(),
-			$since
+			$since,
+			ggsec_stats_until_day( $until )
 		),
 		ARRAY_A
 	);
@@ -731,6 +748,8 @@ function ggsec_stats_render_page() {
 			);
 			?>
 		</p>
+
+		<?php ggsec_stats_render_notify_settings(); ?>
 	</div>
 	<?php
 }
