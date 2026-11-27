@@ -115,8 +115,8 @@ function ggsec_stats_report_due( $settings, $state, DateTimeImmutable $now ) {
 
 /**
  * Requests since $since_utc: login/XML-RPC probes, and reconnaissance (scanner bots or non-human 404s for
- * sensitive paths). Unlike ggsec_stats_recon_summary(), recon here leaves out login/XML-RPC probes, so a
- * brute-force attack raises the login alert only, not both.
+ * sensitive paths). Unlike ggsec_stats_recon_summary(), recon here leaves out all login/XML-RPC probes,
+ * including those from scanners such as WPScan, so a brute-force attack raises the login alert only, not both.
  *
  * @return array{login:int,recon:int}
  */
@@ -125,9 +125,10 @@ function ggsec_stats_alert_counts( $since_utc ) {
 	$row = $wpdb->get_row(
 		$wpdb->prepare(
 			"SELECT SUM(status = %d) AS login,
-				SUM((kind = %d AND bot_type = 'scanner')
-					OR (status = %d AND (kind = %d OR (kind = %d AND created_at < %s)) AND path REGEXP %s)) AS recon
+				SUM(status <> %d AND ((kind = %d AND bot_type = 'scanner')
+					OR (status = %d AND (kind = %d OR (kind = %d AND created_at < %s)) AND path REGEXP %s))) AS recon
 			FROM %i WHERE created_at >= %s",
+			GGSEC_STATS_STATUS_PROBE,
 			GGSEC_STATS_STATUS_PROBE,
 			GGSEC_STATS_KIND_BOT,
 			GGSEC_STATS_STATUS_404,
@@ -191,11 +192,12 @@ function ggsec_stats_alert_recon_details( $since_utc ) {
 		'paths'   => $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT path, COUNT(*) AS hits FROM %i WHERE created_at >= %s
-					AND ((kind = %d AND bot_type = 'scanner')
+					AND status <> %d AND ((kind = %d AND bot_type = 'scanner')
 						OR (status = %d AND (kind = %d OR (kind = %d AND created_at < %s)) AND path REGEXP %s))
 				GROUP BY path ORDER BY hits DESC LIMIT 5",
 				$table,
 				$since_utc,
+				GGSEC_STATS_STATUS_PROBE,
 				GGSEC_STATS_KIND_BOT,
 				GGSEC_STATS_STATUS_404,
 				GGSEC_STATS_KIND_BOT,
@@ -208,11 +210,12 @@ function ggsec_stats_alert_recon_details( $since_utc ) {
 		'clients' => $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT COALESCE(bot_name, ua, '') AS client, COUNT(*) AS hits FROM %i WHERE created_at >= %s
-					AND ((kind = %d AND bot_type = 'scanner')
+					AND status <> %d AND ((kind = %d AND bot_type = 'scanner')
 						OR (status = %d AND (kind = %d OR (kind = %d AND created_at < %s)) AND path REGEXP %s))
 				GROUP BY client ORDER BY hits DESC LIMIT 5",
 				$table,
 				$since_utc,
+				GGSEC_STATS_STATUS_PROBE,
 				GGSEC_STATS_KIND_BOT,
 				GGSEC_STATS_STATUS_404,
 				GGSEC_STATS_KIND_BOT,
@@ -476,7 +479,7 @@ function ggsec_stats_build_alert( $kind, $count, $threshold, $details ) {
 	$rows = array();
 	foreach ( $details['clients'] as $r ) {
 		$client = '' !== (string) $r['client'] ? (string) $r['client'] : __( '(empty user agent)', 'ggsec-stats' );
-		$rows[] = array( wp_html_excerpt( $client, 120, '…' ), number_format_i18n( (int) $r['hits'] ) );
+		$rows[] = array( ggsec_stats_truncate( $client, 120 ), number_format_i18n( (int) $r['hits'] ) );
 	}
 	$body .= ggsec_stats_mail_heading( __( 'Clients', 'ggsec-stats' ) )
 		. ggsec_stats_mail_table( array( __( 'Bot or user agent', 'ggsec-stats' ), __( 'Requests', 'ggsec-stats' ) ), $rows );
